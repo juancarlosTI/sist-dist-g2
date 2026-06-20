@@ -1,0 +1,39 @@
+FROM golang:1.25-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache \
+    git \
+    bash \
+    netcat-openbsd \
+    ca-certificates
+
+RUN go install github.com/air-verse/air@latest
+ENV PATH="/root/go/bin:${PATH}"
+
+COPY go.work go.work.sum ./
+
+# COPY global_index_case/go.mod global_index_case/go.sum ./global_index_case/
+COPY documentocase/go.mod documentocase/go.sum ./documentocase/
+COPY shared/go.mod shared/go.sum ./shared/
+COPY auth_service/go.mod auth_service/go.sum ./auth_service/
+# COPY legalcase/go.mod legalcase/go.sum ./legalcase/
+
+RUN go work sync
+RUN cd auth_service && go mod download
+
+# COPY global_index_case ./global_index_case
+COPY documentocase ./documentocase
+COPY shared ./shared
+COPY auth_service ./auth_service
+# COPY legalcase ./legalcase
+
+
+WORKDIR /app/auth_service
+
+COPY auth_service/initContainer.sh /app/initContainer.sh
+RUN chmod 755 /app/initContainer.sh
+
+EXPOSE 10050
+
+CMD ["air", "-c", ".air.api.toml"]

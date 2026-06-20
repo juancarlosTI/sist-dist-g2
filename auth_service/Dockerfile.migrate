@@ -1,0 +1,32 @@
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+COPY go.work go.work.sum ./
+
+# COPY global_index_case ./global_index_case
+# COPY legalcase ./legalcase
+COPY shared ./shared
+COPY auth_service ./auth_service
+COPY documentocase ./documentocase
+
+RUN go work sync
+
+WORKDIR /app/auth_service
+
+RUN go mod download
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o migrate ./cmd/migrate
+
+
+FROM alpine:3.23
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/auth_service/migrate .
+COPY auth_service/migrations ./migrations
+
+CMD ["./migrate"]

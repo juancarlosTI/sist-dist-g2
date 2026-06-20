@@ -1,0 +1,15 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -gcflags='all=-N -l' -o tmp/app ./cmd/api"
+bin = "tmp/app"
+delay = 500 # 0.5s para builds rápidos no monorepo
+
+[log]
+time = true
+
+[watch]
+include_ext = ["go"]
+include_dir = ["internal", "pkg", "cmd"]
+exclude_dir = ["tmp", "vendor"]

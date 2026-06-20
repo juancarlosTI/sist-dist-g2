@@ -1,0 +1,18 @@
+# Usa a imagem leve do Nginx 1.26
+FROM nginx:1.26-alpine
+
+# Instala ferramentas úteis que você sentiu falta (opcional)
+RUN apk update && apk add --no-cache nano bash
+
+RUN rm /etc/nginx/conf.d/default.conf
+# Copia sua configuração personalizada para dentro do container
+# (Certifique-se de ter o arquivo nginx.conf na sua pasta atual)
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# # Copia seus arquivos estáticos (HTML, CSS, JS) para a pasta padrão do Nginx
+# COPY ./html /usr/share/nginx/html
+
+# COPY ./certs /etc/nginx/certs
+# O Nginx já vem com o comando de inicialização padrão, 
+# então não é estritamente necessário colocar o CMD aqui.
+EXPOSE 80 443

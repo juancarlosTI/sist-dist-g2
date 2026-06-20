@@ -1,0 +1,9 @@
+go 1.25.5
+
+use (
+	./auth_service
+	./documentocase
+	// ./legalcase
+	./shared
+// ./global_index_case
+)

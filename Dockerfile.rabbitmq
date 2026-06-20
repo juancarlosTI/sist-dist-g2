@@ -1,0 +1,7 @@
+FROM rabbitmq:3.13-management
+
+USER root
+
+RUN chown -R rabbitmq:rabbitmq /var/lib/rabbitmq
+
+USER rabbitmq

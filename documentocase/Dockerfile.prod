@@ -1,0 +1,43 @@
+# -------- BUILD --------
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# workspace
+COPY go.work go.work.sum ./
+
+# copiar todos módulos do workspace
+COPY documentocase ./documentocase
+COPY legalcase ./legalcase
+COPY shared ./shared
+
+# sincronizar workspace
+RUN go work sync
+
+WORKDIR /app/documentocase
+
+# baixar dependências
+RUN go mod download
+
+# build
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -o app ./cmd/api
+
+# -------- RUNTIME --------
+FROM alpine:3.23
+
+RUN apk --no-cache add ca-certificates netcat-openbsd
+
+RUN adduser -D -g '' documentouser
+
+WORKDIR /app
+
+COPY --from=builder /app/documentocase/app .
+
+COPY --chown=documentouser:documentouser --chmod=755 documentocase/initContainer.sh .
+
+USER documentouser
+
+EXPOSE 10002
+
+CMD ["./initContainer.sh"]

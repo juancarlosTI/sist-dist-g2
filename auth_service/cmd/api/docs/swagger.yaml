@@ -1,0 +1,285 @@
+basePath: /api/v1/auth-service
+definitions:
+  commands.LoginComEmailCommand:
+    properties:
+      email:
+        example: user@email.com
+        type: string
+      password:
+        example: "123456"
+        type: string
+    type: object
+  commands.RefreshTokenPayload:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  commands.RegistroComEmailCommand:
+    properties:
+      account_type:
+        example: PROFISSIONAL
+        type: string
+      email:
+        type: string
+      nome:
+        minLength: 3
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - nome
+    - password
+    type: object
+  dto.MeResponseDTO:
+    properties:
+      me_email:
+        type: string
+      me_id:
+        type: string
+      me_nome:
+        type: string
+      me_roles:
+        type: string
+    type: object
+  dto.TokenResponseDTO:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  response.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        items:
+          $ref: '#/definitions/response.ErrorDetail'
+        type: array
+      message:
+        type: string
+    type: object
+  response.ErrorDetail:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+  response.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/response.ErrorBody'
+    type: object
+host: localhost
+info:
+  contact: {}
+  description: Auth Service
+  title: Auth Service API
+  version: "1.0"
+paths:
+  /auth/google/callback:
+    get:
+      parameters:
+      - description: Authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "307":
+          description: Redirect para frontend com tokens
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Callback do Google OAuth
+      tags:
+      - Auth OIDC
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Credenciais
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/commands.LoginComEmailCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TokenResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Login com email
+      tags:
+      - Auth
+  /auth/login/google:
+    get:
+      produces:
+      - text/plain
+      responses:
+        "307":
+          description: Redirect para Google
+      summary: Iniciar login com Google
+      tags:
+      - Auth OIDC
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Logout payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/commands.RefreshTokenPayload'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Logout do usuário
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Retorna os dados do usuário autenticado via JWT
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MeResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retorna usuário autenticado
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Dados do usuário
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/commands.RegistroComEmailCommand'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: ok
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Registrar usuário
+      tags:
+      - Auth
+  /auth/token/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/commands.RefreshTokenPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TokenResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Renovar tokens
+      tags:
+      - Auth
+  /auth/token/revoke:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/commands.RefreshTokenPayload'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Revogar refresh token
+      tags:
+      - Auth
+  /auth/validate:
+    get:
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Headers com dados do usuário
+        "401":
+          description: Unauthorized
+      summary: Validar access token (Nginx)
+      tags:
+      - Auth Internal
+  /health:
+    get:
+      description: Endpoint de healthcheck
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+      summary: Retorna status da API
+      tags:
+      - health
+schemes:
+- https
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

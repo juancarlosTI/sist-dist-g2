@@ -1,0 +1,237 @@
+services:
+
+  minio:
+    image: minio/minio:latest
+    container_name: documento-minio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123456
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - minio_data:/data
+
+    networks:
+      - private
+
+  documento-postgres:
+    image: postgres:16
+    container_name: documento-postgres
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documento_bc -d documentocase"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    env_file:
+      - ./documentocase/.env
+
+    volumes:
+      - documento_pgdata:/var/lib/postgresql/data
+
+    networks:
+      - private
+      
+  auth-postgres:
+    image: postgres:16
+    container_name: auth-postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_service -d authservice"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - private
+    env_file:
+      - ./auth_service/.env
+    volumes:
+      - auth_service_pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    build:
+      context: .
+      dockerfile: Dockerfile.rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - private
+
+  migrate-auth:
+    build:
+      context: .
+      dockerfile: auth_service/Dockerfile.migrate
+    env_file:
+      - ./auth_service/.env
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+    networks:
+      - private
+
+  auth-service-api:
+    build:
+      context: .
+      dockerfile: auth_service/Dockerfile.dev
+    env_file:
+      - ./auth_service/.env
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-auth:
+        condition: service_completed_successfully
+
+    # command: ["./initContainer.sh"]
+
+    # healthcheck:
+    #   test: ["CMD", "wget", "-q", "--spider", "http://localhost:10001/api/v1/legal/health"]
+    #   start_period: 20s
+    #   interval: 5s
+    #   retries: 10
+    #   timeout: 5s
+
+    expose:
+      - "10050"
+
+    networks:
+      - private
+
+    volumes:
+      - ./auth_service:/app/auth_service
+
+  migrate-doc:
+    build:
+      context: .
+      dockerfile: documentocase/Dockerfile.migrate
+    env_file:
+      - ./documentocase/.env
+    depends_on:
+      documento-postgres:
+        condition: service_healthy
+    networks:
+      - private
+
+  documento-api:
+    build:
+      context: .
+      dockerfile: documentocase/Dockerfile.dev
+    env_file:
+      - ./documentocase/.env
+    depends_on:
+      documento-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-doc:
+        condition: service_completed_successfully
+    expose:
+      - "10051"
+
+    networks:
+      - private
+
+    volumes:
+      - ./documentocase:/app/documentocase
+      - ./documento_storage:/storage
+
+  documento-outbox-worker:
+    build:
+      context: .
+      dockerfile: documentocase/Dockerfile.dev
+    env_file:
+      - ./documentocase/.env
+    command:
+      - go
+      - run
+      - ./cmd/outbox-worker/outbox-worker.go
+    depends_on:
+      documento-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-doc:
+        condition: service_completed_successfully
+    networks:
+      - private
+    volumes:
+      - ./documentocase:/app/documentocase
+    restart: unless-stopped
+
+  documento-processor-worker:
+    build:
+      context: .
+      dockerfile: documentocase/Dockerfile.dev
+    env_file:
+      - ./documentocase/.env
+    command:
+      - go
+      - run
+      - ./cmd/documento-processor-worker/main.go
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      documento-outbox-worker:
+        condition: service_started
+    networks:
+      - private
+    volumes:
+      - ./documentocase:/app/documentocase
+    # restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.dev
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/html:/usr/share/nginx/html
+
+    depends_on:
+      - auth-service-api
+      - documento-api
+      # - documento-api
+      # - cliente-api
+      # - profissional-api
+
+    networks:
+      - public
+      - private
+
+volumes:
+  auth_service_pgdata:
+  documento_pgdata:
+  rabbitmq_data:
+  documento_storage:
+  minio_data:
+
+networks:
+  public:
+  private:
